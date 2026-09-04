@@ -25,6 +25,9 @@ python run.py
 程序启动后会自动使用默认浏览器打开 <http://127.0.0.1:5000>。
 如果不希望自动打开浏览器，可执行 `python run.py --no-browser`。
 
+使用 PyInstaller 打包后，数据库固定保存在 EXE 同级目录的
+`data/countdowns.sqlite3`，不会写入 PyInstaller 的临时解压目录。
+
 ## 业务树
 
 ```text
@@ -43,3 +46,12 @@ python run.py
 │     └─ app.js                   # 日历与交互
 └─ tests/test_app.py              # 自动化测试
 ```
+python -m PyInstaller `
+  --noconfirm `
+  --clean `
+  --onefile `
+  --windowed `
+  --name "科研倒计时" `
+  --add-data "research_countdown/templates:research_countdown/templates" `
+  --add-data "research_countdown/static:research_countdown/static" `
+  run.py
