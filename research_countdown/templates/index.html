@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>科研倒计时</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">研</span><div><b>科研倒计时</b><small>Research Timeline</small></div></div>
+      <button id="newButton" class="primary-button">＋ 新建倒计时</button>
+      <nav class="nav-tabs" aria-label="视图切换">
+        <button class="nav-item active" data-view="calendar"><span>▦</span> 日历视图</button>
+        <button class="nav-item" data-view="dashboard"><span>◷</span> 倒计时看板</button>
+        <button class="nav-item" data-view="nodes"><span>◇</span> 事项管理</button>
+      </nav>
+      <div class="sidebar-section">
+        <p class="section-label">状态说明</p>
+        <div class="legend"><i class="dot urgent"></i> 3 天内截止</div>
+        <div class="legend"><i class="dot soon"></i> 14 天内截止</div>
+        <div class="legend"><i class="dot normal"></i> 正常进行中</div>
+        <div class="legend"><i class="dot overdue"></i> 已逾期</div>
+      </div>
+      <div class="sidebar-quote">把远方的目标，变成今天可见的刻度。</div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div><p class="eyebrow">RESEARCH SCHEDULE</p><h1 id="pageTitle">日历视图</h1></div>
+        <div class="today-pill" id="todayLabel"></div>
+      </header>
+
+      <section id="calendarView" class="view active">
+        <div class="stats" id="stats"></div>
+        <div class="calendar-card">
+          <div class="calendar-toolbar">
+            <div class="month-nav"><button id="prevMonth" aria-label="上个月">‹</button><h2 id="monthTitle"></h2><button id="nextMonth" aria-label="下个月">›</button></div>
+            <button id="todayButton" class="ghost-button">回到今天</button>
+          </div>
+          <div class="weekdays"><span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span></div>
+          <div id="calendarGrid" class="calendar-grid"></div>
+        </div>
+      </section>
+
+      <section id="dashboardView" class="view">
+        <div class="dashboard-header"><div><h2>重点截止时间线</h2><p>汇总主事项最终截止与阶段子任务截止，按倒计时先后排列。</p></div><div class="timeline-toolbar"><select id="statusFilter"><option value="active" selected>待处理截止点</option><option value="all">全部截止点</option><option value="urgent">3 天内截止</option><option value="soon">14 天内截止</option><option value="overdue">已逾期</option><option value="completed">已完成</option></select><select id="timelineSort"><option value="countdown" selected>最近截止优先</option><option value="reverse">截止日期倒序</option></select></div></div>
+        <div id="nextDeadlineHero" class="deadline-hero"></div>
+        <div id="countdownList" class="deadline-timeline"></div>
+      </section>
+
+      <section id="nodesView" class="view">
+        <div class="dashboard-header"><div><h2>事项与子任务</h2><p>展开倒计时，查看和管理其下的所有阶段子任务。</p></div><div class="node-toolbar"><select id="nodeParentFilter"><option value="all">全部事项</option></select><button id="newNodeButton" class="primary-button">＋ 新建子任务</button></div></div>
+        <div id="nodeList" class="node-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="eventDialog">
+    <form id="eventForm">
+      <div class="dialog-header"><div><p class="eyebrow">MILESTONE</p><h2 id="dialogTitle">新建倒计时</h2></div><button type="button" class="icon-button" id="closeDialog">×</button></div>
+      <input type="hidden" id="eventId">
+      <label>事项名称<input id="title" maxlength="80" required placeholder="例如：国家自然科学基金申报"></label>
+      <div class="form-row"><label>开始日期<input id="startDate" type="date" required></label><label>截止日期<input id="deadline" type="date" required></label></div>
+      <section class="milestone-editor">
+        <div class="milestone-editor-head"><div><b>分阶段时间节点</b><small>同一事项可添加多个提交、审核或材料节点</small></div><button type="button" id="addMilestone" class="ghost-button">＋ 添加节点</button></div>
+        <div id="milestoneRows" class="milestone-rows"></div>
+      </section>
+      <div class="form-row"><label>分类<select id="category">{% for category in categories %}<option>{{ category }}</option>{% endfor %}</select></label><fieldset><legend>标记颜色</legend><div class="color-options">{% for color in colors %}<label class="color-choice" style="--choice: {{ color }}"><input type="radio" name="color" value="{{ color }}" {% if loop.first %}checked{% endif %}><span></span></label>{% endfor %}</div></fieldset></div>
+      <label>备注<textarea id="description" maxlength="500" rows="3" placeholder="记录投稿要求、材料清单或关键说明……"></textarea></label>
+      <p id="formError" class="form-error"></p>
+      <div class="dialog-actions"><button type="button" class="danger-button dialog-delete" id="deleteEventButton">删除事项</button><span class="action-spacer"></span><button type="button" class="ghost-button" id="cancelDialog">取消</button><button type="submit" class="primary-button">保存事项</button></div>
+    </form>
+  </dialog>
+  <dialog id="nodeDialog" class="small-dialog">
+    <form id="nodeForm">
+      <div class="dialog-header"><div><p class="eyebrow">TIME NODE</p><h2 id="nodeDialogTitle">新建时间节点</h2></div><button type="button" class="icon-button" id="closeNodeDialog">×</button></div>
+      <input type="hidden" id="nodeId">
+      <label>所属事项<select id="nodeParent" required></select></label>
+      <label>节点名称<input id="nodeTitle" maxlength="80" required placeholder="例如：单位审核"></label>
+      <div class="form-row"><label>开始日期<input id="nodeStart" type="date" required></label><label>截止日期<input id="nodeDeadline" type="date" required></label></div>
+      <p id="nodeRangeHint" class="form-hint"></p>
+      <p id="nodeFormError" class="form-error"></p>
+      <div class="dialog-actions"><button type="button" class="danger-button dialog-delete" id="deleteNodeButton">删除节点</button><button type="button" class="ghost-button" id="editParentFromNode">编辑所属主事项</button><span class="action-spacer"></span><button type="button" class="ghost-button" id="cancelNodeDialog">取消</button><button type="submit" class="primary-button">保存节点</button></div>
+    </form>
+  </dialog>
+  <aside id="dayDrawer" class="day-drawer" aria-hidden="true">
+    <div class="drawer-header"><div><p class="eyebrow">DAILY SCHEDULE</p><h2 id="drawerDate"></h2></div><button class="icon-button" id="closeDrawer" aria-label="关闭">×</button></div>
+    <div id="drawerItems" class="drawer-items"></div>
+    <button id="drawerAdd" class="primary-button">＋ 在这一天新建事项</button>
+  </aside>
+  <div id="drawerBackdrop" class="drawer-backdrop"></div>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
