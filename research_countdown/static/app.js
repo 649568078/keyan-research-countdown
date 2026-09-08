@@ -327,7 +327,7 @@ $("#closeDrawer").addEventListener("click", closeDayDrawer);
 $("#drawerBackdrop").addEventListener("click", closeDayDrawer);
 $("#dayDrawer").addEventListener("wheel", (event) => event.stopPropagation(), { passive: true });
 $("#drawerAdd").addEventListener("click", () => { const date = state.drawerDate; closeDayDrawer(); openDialog(null, date); });
-$("#newNodeButton").addEventListener("click", () => openNodeDialog());
+$("#newTaskButton").addEventListener("click", () => openDialog());
 $("#nodeForm").addEventListener("submit", saveNode);
 $("#closeNodeDialog").addEventListener("click", () => $("#nodeDialog").close());
 $("#cancelNodeDialog").addEventListener("click", () => $("#nodeDialog").close());
