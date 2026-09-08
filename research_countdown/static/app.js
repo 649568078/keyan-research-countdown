@@ -1,4 +1,4 @@
-const state = { items: [], cursor: new Date(), view: "calendar", drawerDate: null, collapsedNodeGroups: new Set() };
+const state = { items: [], cursor: new Date(), view: "calendar", drawerDate: null, collapsedNodeGroups: new Set(), collapsedDrawerItems: new Set() };
 const $ = (selector) => document.querySelector(selector);
 const pad = (n) => String(n).padStart(2, "0");
 const localISO = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -42,7 +42,7 @@ function renderCalendar() {
     const iso = localISO(day);
     const content = calendarContentForDate(iso);
     const deadlineCountHtml = content.deadlineProjectCount ? `<span class="deadline-count">● ${content.deadlineProjectCount} 个项目截止</span>` : "";
-    const deadlineHtml = content.deadlines.slice(0, 2).map((entry) => `<button class="calendar-event deadline" style="--event-color:${entry.item.color}" ${entry.node ? `data-node-edit="${entry.node.id}"` : `data-edit="${entry.item.id}"`} title="点击编辑截止项：${escapeHtml(entry.label)}">${escapeHtml(entry.label)}</button>`).join("");
+    const deadlineHtml = content.deadlines.slice(0, 2).map((entry) => `<button class="calendar-event deadline" style="--event-color:${entry.item.color}" data-day-details="${iso}" title="查看当天事项：${escapeHtml(entry.label)}">${escapeHtml(entry.label)}</button>`).join("");
     const hiddenDeadlineHtml = content.deadlines.length > 2 ? `<button class="more-count deadline-summary" data-day-details="${iso}">另有 ${content.deadlines.length - 2} 项截止</button>` : "";
     const ongoingHtml = content.ongoingCount ? `<button class="more-count ongoing-summary" data-day-details="${iso}">进行中 ${content.ongoingCount} 项 · 查看</button>` : "";
     html += `<div class="day ${day.getMonth() !== month ? "outside" : ""} ${iso === today ? "today" : ""}" data-date="${iso}"><span class="day-number">${day.getDate()}</span><div class="day-events">${deadlineCountHtml}${deadlineHtml}${hiddenDeadlineHtml}${ongoingHtml}</div></div>`;
@@ -189,13 +189,14 @@ function openDayDrawer(iso, itemId = null) {
   $("#drawerDate").textContent = `${date.getFullYear()} 年 ${date.getMonth() + 1} 月 ${date.getDate()} 日`;
   const relevant = state.items.filter((item) => !item.completed && iso >= item.start_date && iso <= item.deadline && (!itemId || item.id === Number(itemId)));
   $("#drawerItems").innerHTML = relevant.length ? relevant.map((item) => {
+    const collapsed = state.collapsedDrawerItems.has(item.id);
     const nodes = [...item.milestones].sort((a, b) => a.deadline.localeCompare(b.deadline));
-    const nodeHtml = nodes.length ? nodes.map((node) => {
+    const nodeHtml = nodes.length ? nodes.map((node, index) => {
       const active = iso >= node.start_date && iso <= node.deadline;
-      const marker = iso === node.deadline ? " · 当天截止" : active ? " · 进行到此节点" : "";
-      return `<button class="drawer-node ${active ? "active" : ""} ${iso === node.deadline ? "deadline" : ""}" data-node-edit="${node.id}"><b>${escapeHtml(node.title)}</b><span>${formatDate(node.start_date)} → ${formatDate(node.deadline)} · ${escapeHtml(node.status_label)}${marker}</span></button>`;
-    }).join("") : `<div class="drawer-node"><b>暂无子任务</b><span>可前往事项管理添加阶段子任务</span></div>`;
-    return `<article class="drawer-card" style="--item-color:${item.color}"><div class="drawer-card-head"><div><h3>${escapeHtml(item.title)}</h3><span class="meta">${escapeHtml(item.category)} · ${escapeHtml(item.status_label)}</span></div><button class="edit-link" data-edit="${item.id}">编辑</button></div>${nodeHtml}</article>`;
+      const marker = iso === node.deadline ? "当天截止" : active ? "当前阶段" : node.completed ? "已完成" : "未到此阶段";
+      return `<article class="drawer-node ${active ? "active" : ""} ${iso === node.deadline ? "deadline" : ""} ${node.completed ? "completed" : ""}"><span class="drawer-node-order">${index + 1}</span><button class="drawer-node-main" data-node-edit="${node.id}"><b>${escapeHtml(node.title)}</b><span class="drawer-node-range">${formatDate(node.start_date)} → ${formatDate(node.deadline)}</span><span class="drawer-node-status">${escapeHtml(node.status_label)} · ${marker}</span></button><div class="drawer-actions drawer-node-actions"><button data-node-edit="${node.id}">编辑</button><button data-node-toggle="${node.id}">${node.completed ? "恢复" : "完成"}</button><button data-node-delete="${node.id}">删除</button></div></article>`;
+    }).join("") : `<div class="drawer-node-empty"><b>暂无子任务</b><span>可在“事项管理”中添加阶段子任务</span></div>`;
+    return `<article class="drawer-card ${collapsed ? "collapsed" : ""}" style="--item-color:${item.color}"><div class="drawer-card-head"><button class="drawer-card-toggle" data-drawer-toggle="${item.id}" aria-expanded="${!collapsed}"><span class="group-chevron">⌄</span><div><h3>${escapeHtml(item.title)}</h3><span class="meta">${escapeHtml(item.category)} · ${escapeHtml(item.status_label)} · ${nodes.length} 个子任务</span></div></button><div class="drawer-actions drawer-project-actions"><button data-edit="${item.id}">编辑主事项</button><button data-toggle="${item.id}">${item.completed ? "恢复" : "完成"}</button><button data-delete="${item.id}">删除</button></div></div><div class="drawer-card-body">${nodeHtml}</div></article>`;
   }).join("") : `<div class="drawer-empty">当天没有进行中的事项</div>`;
   $("#dayDrawer").classList.add("open"); $("#drawerBackdrop").classList.add("open"); $("#dayDrawer").setAttribute("aria-hidden", "false");
 }
@@ -258,6 +259,17 @@ function escapeHtml(text) { const div = document.createElement("div"); div.textC
 function formatDate(value) { const d = parseDate(value); return `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())}`; }
 function toast(message) { const el = $("#toast"); el.textContent = message; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 1800); }
 
+async function reloadAndKeepDrawer() {
+  const keepDrawer = $("#dayDrawer").classList.contains("open") && state.drawerDate;
+  const date = state.drawerDate;
+  const scrollTop = $("#drawerItems").scrollTop;
+  await loadItems();
+  if (keepDrawer) {
+    openDayDrawer(date);
+    $("#drawerItems").scrollTop = scrollTop;
+  }
+}
+
 document.addEventListener("change", async (event) => {
   const timelineToggle = event.target.closest("[data-timeline-toggle]");
   if (!timelineToggle) return;
@@ -278,17 +290,28 @@ document.addEventListener("change", async (event) => {
 document.addEventListener("click", async (event) => {
   const edit = event.target.closest("[data-edit]"); const toggle = event.target.closest("[data-toggle]"); const remove = event.target.closest("[data-delete]"); const dayDetails = event.target.closest("[data-day-details]"); const itemDetails = event.target.closest("[data-item-details]");
   const nodeEdit = event.target.closest("[data-node-edit]"); const nodeToggle = event.target.closest("[data-node-toggle]"); const nodeDelete = event.target.closest("[data-node-delete]");
-  const nodeAdd = event.target.closest("[data-node-add]"); const groupToggle = event.target.closest("[data-node-group-toggle]");
+  const nodeAdd = event.target.closest("[data-node-add]"); const groupToggle = event.target.closest("[data-node-group-toggle]"); const drawerToggle = event.target.closest("[data-drawer-toggle]");
   if (edit) { closeDayDrawer(); openDialog(state.items.find((i) => i.id === Number(edit.dataset.edit))); }
-  if (toggle) { await api(`/api/countdowns/${toggle.dataset.toggle}/toggle`, { method: "PATCH" }); await loadItems(); }
-  if (remove && confirm("确定删除这个倒计时吗？")) { await api(`/api/countdowns/${remove.dataset.delete}`, { method: "DELETE" }); toast("事项已删除"); await loadItems(); }
+  if (toggle) { await api(`/api/countdowns/${toggle.dataset.toggle}/toggle`, { method: "PATCH" }); await reloadAndKeepDrawer(); }
+  if (remove && confirm("确定删除这个倒计时吗？")) { await api(`/api/countdowns/${remove.dataset.delete}`, { method: "DELETE" }); toast("事项已删除"); await reloadAndKeepDrawer(); }
   if (itemDetails) openDayDrawer(itemDetails.dataset.date, itemDetails.dataset.itemDetails);
   else if (dayDetails) openDayDrawer(dayDetails.dataset.dayDetails);
   else if (event.target.closest(".day") && !edit && !nodeEdit) openDayDrawer(event.target.closest(".day").dataset.date);
   if (nodeEdit) openNodeDialog(allNodes().find((node) => node.id === Number(nodeEdit.dataset.nodeEdit)));
-  if (nodeToggle) { await api(`/api/milestones/${nodeToggle.dataset.nodeToggle}/toggle`, { method: "PATCH" }); toast("节点状态已更新"); await loadItems(); }
-  if (nodeDelete && confirm("确定删除这个时间节点吗？所属主事项不会被删除。")) { await api(`/api/milestones/${nodeDelete.dataset.nodeDelete}`, { method: "DELETE" }); toast("节点已删除"); await loadItems(); }
+  if (nodeToggle) { await api(`/api/milestones/${nodeToggle.dataset.nodeToggle}/toggle`, { method: "PATCH" }); toast("节点状态已更新"); await reloadAndKeepDrawer(); }
+  if (nodeDelete && confirm("确定删除这个时间节点吗？所属主事项不会被删除。")) { await api(`/api/milestones/${nodeDelete.dataset.nodeDelete}`, { method: "DELETE" }); toast("节点已删除"); await reloadAndKeepDrawer(); }
   if (nodeAdd) openNodeDialog(null, nodeAdd.dataset.nodeAdd);
+  if (drawerToggle) {
+    const id = Number(drawerToggle.dataset.drawerToggle);
+    state.collapsedDrawerItems.has(id) ? state.collapsedDrawerItems.delete(id) : state.collapsedDrawerItems.add(id);
+    const card = drawerToggle.closest(".drawer-card");
+    const collapsed = state.collapsedDrawerItems.has(id);
+    card?.classList.toggle("collapsed", collapsed);
+    drawerToggle.setAttribute("aria-expanded", String(!collapsed));
+    if (!collapsed && card) {
+      requestAnimationFrame(() => card.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  }
   if (groupToggle) {
     const id = Number(groupToggle.dataset.nodeGroupToggle);
     state.collapsedNodeGroups.has(id) ? state.collapsedNodeGroups.delete(id) : state.collapsedNodeGroups.add(id);
@@ -302,6 +325,7 @@ $("#cancelDialog").addEventListener("click", () => $("#eventDialog").close());
 $("#addMilestone").addEventListener("click", () => addMilestoneRow());
 $("#closeDrawer").addEventListener("click", closeDayDrawer);
 $("#drawerBackdrop").addEventListener("click", closeDayDrawer);
+$("#dayDrawer").addEventListener("wheel", (event) => event.stopPropagation(), { passive: true });
 $("#drawerAdd").addEventListener("click", () => { const date = state.drawerDate; closeDayDrawer(); openDialog(null, date); });
 $("#newNodeButton").addEventListener("click", () => openNodeDialog());
 $("#nodeForm").addEventListener("submit", saveNode);
