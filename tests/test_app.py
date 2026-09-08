@@ -42,6 +42,12 @@ def test_crud_flow(client):
     assert client.get("/api/countdowns").get_json() == []
 
 
+def test_health_check(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == "ok"
+
+
 def test_rejects_invalid_date_range(client):
     response = client.post("/api/countdowns", json=sample_payload(start_date="2026-10-01"))
     assert response.status_code == 400

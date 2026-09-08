@@ -74,12 +74,12 @@ function renderDashboard() {
     ...item.milestones.map((node) => ({
       id: node.id, kind: "milestone", title: node.title, parent: item,
       deadline: node.deadline, days_left: node.days_left,
-      status: node.status, status_label: node.status_label,
+      status: node.status, status_label: node.status_label, completed: node.completed,
     })),
     {
       id: item.id, kind: "final", title: item.title, parent: item,
       deadline: item.deadline, days_left: item.days_left,
-      status: item.status, status_label: item.status_label,
+      status: item.status, status_label: item.status_label, completed: item.completed,
     },
   ]);
   points = points.filter((point) => filter === "all" || (filter === "active" ? point.status !== "completed" : point.status === filter));
@@ -103,7 +103,7 @@ function renderDashboard() {
   $("#countdownList").innerHTML = `<div class="timeline-cap start">时间线起点</div>${points.map((point) => {
     const remaining = point.status === "completed" ? "已完成" : point.days_left < 0 ? `逾期 ${Math.abs(point.days_left)} 天` : point.days_left === 0 ? "今天截止" : `${point.days_left} 天后`;
     const action = point.kind === "milestone" ? `data-node-edit="${point.id}"` : `data-item-details="${point.parent.id}" data-date="${point.deadline}"`;
-    return `<article class="timeline-point ${point.kind}" style="--point-color:${statusColor[point.status]};--item-color:${point.parent.color}"><i class="timeline-dot"></i><time>${formatDate(point.deadline)}</time><button class="timeline-card" ${action}><div><span class="timeline-kind">${point.kind === "final" ? "◆ 最终截止" : "◇ 阶段截止"}</span><h3>${escapeHtml(point.kind === "final" ? point.parent.title : point.title)}</h3><p>${escapeHtml(point.parent.title)} · ${escapeHtml(point.parent.category)}</p></div><div class="timeline-remaining"><strong>${remaining}</strong><small>${escapeHtml(point.status_label)}</small></div></button></article>`;
+    return `<article class="timeline-point ${point.kind}" style="--point-color:${statusColor[point.status]};--item-color:${point.parent.color}"><i class="timeline-dot"></i><time>${formatDate(point.deadline)}</time><div class="timeline-card ${point.completed ? "completed" : ""}"><label class="timeline-check" title="${point.completed ? "标记为未完成" : "标记为已完成"}"><input type="checkbox" data-timeline-toggle="${point.id}" data-timeline-kind="${point.kind}" ${point.completed ? "checked" : ""}><span></span></label><button class="timeline-card-main" ${action}><div><span class="timeline-kind">${point.kind === "final" ? "◆ 最终截止" : "◇ 阶段截止"}</span><h3>${escapeHtml(point.kind === "final" ? point.parent.title : point.title)}</h3><p>${escapeHtml(point.parent.title)} · ${escapeHtml(point.parent.category)}</p></div><div class="timeline-remaining"><strong>${remaining}</strong><small>${escapeHtml(point.status_label)}</small></div></button></div></article>`;
   }).join("")}<div class="timeline-cap end">时间线终点 · 共 ${points.length} 个截止点</div>`;
 }
 
@@ -257,6 +257,23 @@ function switchView(view) {
 function escapeHtml(text) { const div = document.createElement("div"); div.textContent = text; return div.innerHTML; }
 function formatDate(value) { const d = parseDate(value); return `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())}`; }
 function toast(message) { const el = $("#toast"); el.textContent = message; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 1800); }
+
+document.addEventListener("change", async (event) => {
+  const timelineToggle = event.target.closest("[data-timeline-toggle]");
+  if (!timelineToggle) return;
+  const id = timelineToggle.dataset.timelineToggle;
+  const url = timelineToggle.dataset.timelineKind === "milestone" ? `/api/milestones/${id}/toggle` : `/api/countdowns/${id}/toggle`;
+  timelineToggle.disabled = true;
+  try {
+    await api(url, { method: "PATCH" });
+    toast("完成状态已更新");
+    await loadItems();
+  } catch (error) {
+    timelineToggle.checked = !timelineToggle.checked;
+    timelineToggle.disabled = false;
+    toast(error.message);
+  }
+});
 
 document.addEventListener("click", async (event) => {
   const edit = event.target.closest("[data-edit]"); const toggle = event.target.closest("[data-toggle]"); const remove = event.target.closest("[data-delete]"); const dayDetails = event.target.closest("[data-day-details]"); const itemDetails = event.target.closest("[data-item-details]");

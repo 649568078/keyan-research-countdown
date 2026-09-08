@@ -19,6 +19,11 @@ def index():
     return render_template("index.html", categories=CATEGORIES, colors=COLORS)
 
 
+@bp.get("/health")
+def health():
+    return "ok"
+
+
 @bp.get("/api/countdowns")
 def countdown_list():
     return jsonify([

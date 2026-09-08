@@ -52,6 +52,6 @@ python -m PyInstaller `
   --onefile `
   --windowed `
   --name "科研倒计时" `
-  --add-data "research_countdown/templates:research_countdown/templates" `
-  --add-data "research_countdown/static:research_countdown/static" `
+  --add-data "research_countdown/templates;research_countdown/templates" `
+  --add-data "research_countdown/static;research_countdown/static" `
   run.py
