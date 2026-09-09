@@ -1,4 +1,4 @@
-const state = { items: [], cursor: new Date(), view: "calendar", drawerDate: null, collapsedNodeGroups: new Set(), collapsedDrawerItems: new Set() };
+const state = { items: [], cursor: new Date(), view: "calendar", drawerDate: null, collapsedNodeGroups: new Set(), collapsedDrawerItems: new Set(), expandedArchiveItems: new Set(), selectedArchiveItems: new Set(), archiveSearch: "", archivePage: 1, archivePageSize: 5 };
 const $ = (selector) => document.querySelector(selector);
 const pad = (n) => String(n).padStart(2, "0");
 const localISO = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -17,7 +17,7 @@ async function loadItems() {
   renderAll();
 }
 
-function renderAll() { renderStats(); renderCalendar(); renderDashboard(); renderNodeParentOptions(); renderNodes(); }
+function renderAll() { renderStats(); renderCalendar(); renderDashboard(); renderNodeParentOptions(); renderNodes(); renderArchive(); }
 
 function renderStats() {
   const active = state.items.filter((i) => !i.completed);
@@ -70,7 +70,8 @@ function calendarContentForDate(iso) {
 function renderDashboard() {
   const filter = $("#statusFilter").value;
   const sort = $("#timelineSort").value;
-  let points = state.items.flatMap((item) => [
+  const dashboardItems = state.items.filter((item) => !item.archived);
+  let points = dashboardItems.flatMap((item) => [
     ...item.milestones.map((node) => ({
       id: node.id, kind: "milestone", title: node.title, parent: item,
       deadline: node.deadline, days_left: node.days_left,
@@ -90,7 +91,7 @@ function renderDashboard() {
     return aPast ? b.days_left - a.days_left : a.days_left - b.days_left;
   });
 
-  const pending = state.items.flatMap((item) => [
+  const pending = dashboardItems.flatMap((item) => [
     ...item.milestones.map((node) => ({ ...node, title: node.title, parent: item, kind: "milestone" })),
     { ...item, title: item.title, parent: item, kind: "final" },
   ]).filter((point) => point.status !== "completed" && point.days_left >= 0).sort((a, b) => a.days_left - b.days_left)[0];
@@ -114,7 +115,8 @@ function allNodes() {
 function renderNodeParentOptions() {
   const filter = $("#nodeParentFilter");
   const oldFilter = filter.value;
-  filter.innerHTML = `<option value="all">全部事项</option>${state.items.map((item) => `<option value="${item.id}">${escapeHtml(item.title)}</option>`).join("")}`;
+  const currentItems = state.items.filter((item) => !item.archived);
+  filter.innerHTML = `<option value="all">全部事项</option>${currentItems.map((item) => `<option value="${item.id}">${escapeHtml(item.title)}</option>`).join("")}`;
   filter.value = [...filter.options].some((option) => option.value === oldFilter) ? oldFilter : "all";
   const parent = $("#nodeParent");
   const oldParent = parent.value;
@@ -124,9 +126,10 @@ function renderNodeParentOptions() {
 
 function renderNodes() {
   const filter = $("#nodeParentFilter").value;
-  const items = state.items.filter((item) => filter === "all" || item.id === Number(filter));
+  const items = state.items.filter((item) => !item.archived && (filter === "all" || item.id === Number(filter)));
   if (!items.length) {
-    $("#nodeList").innerHTML = `<div class="empty-state"><b>还没有倒计时事项</b>请先点击左侧“新建倒计时”，创建一个主事项。</div>`;
+    const archivedCount = state.items.filter((item) => item.archived).length;
+    $("#nodeList").innerHTML = `<div class="empty-state"><b>当前没有未归档事项</b>${archivedCount ? `已有 ${archivedCount} 个事项收纳在归档箱中。` : "请点击“新建任务”创建一个主事项。"}</div>`;
     return;
   }
   $("#nodeList").innerHTML = items.map((item) => {
@@ -136,8 +139,51 @@ function renderNodes() {
       const remaining = node.completed ? "已完成" : node.days_left < 0 ? `逾期 ${Math.abs(node.days_left)} 天` : node.days_left === 0 ? "今天截止" : `剩余 ${node.days_left} 天`;
       return `<article class="node-card ${node.completed ? "completed" : ""}" style="--status-color:${statusColor[node.status]}"><i class="status-bar"></i><div><h3>${escapeHtml(node.title)}</h3><span class="node-parent">阶段子任务</span></div><div class="date-range">${formatDate(node.start_date)} → ${formatDate(node.deadline)}</div><div class="node-status"><b>${remaining}</b><small>${escapeHtml(node.status_label)}</small></div><div class="card-actions"><button data-node-toggle="${node.id}" title="${node.completed ? "恢复节点" : "完成节点"}">${node.completed ? "↶" : "✓"}</button><button data-node-edit="${node.id}" title="编辑节点">✎</button><button data-node-delete="${node.id}" title="删除节点">⌫</button></div></article>`;
     }).join("") : `<div class="node-child-empty">这个倒计时还没有子任务 <button data-node-add="${item.id}">＋ 添加第一个子任务</button></div>`;
-    return `<section class="node-group ${collapsed ? "collapsed" : ""}"><button class="node-group-header" data-node-group-toggle="${item.id}"><span class="group-chevron">⌄</span><i class="status-bar" style="--status-color:${statusColor[item.status]}"></i><div class="node-group-title"><h3>${escapeHtml(item.title)}</h3><span>${escapeHtml(item.category)} · ${escapeHtml(item.status_label)}</span></div><div class="date-range">${formatDate(item.start_date)} → ${formatDate(item.deadline)}</div><div class="group-count"><strong>${nodes.length}</strong><small>个子任务</small></div></button><div class="node-group-body"><div class="node-group-actions"><span>阶段子任务按截止时间排列</span><div><button data-edit="${item.id}">编辑倒计时</button><button data-node-add="${item.id}">＋ 添加子任务</button></div></div><div class="node-children">${children}</div></div></section>`;
+    return `<section class="node-group ${collapsed ? "collapsed" : ""}"><button class="node-group-header" data-node-group-toggle="${item.id}"><span class="group-chevron">⌄</span><i class="status-bar" style="--status-color:${statusColor[item.status]}"></i><div class="node-group-title"><h3>${escapeHtml(item.title)}</h3><span>${escapeHtml(item.category)} · ${escapeHtml(item.status_label)}</span></div><div class="date-range">${formatDate(item.start_date)} → ${formatDate(item.deadline)}</div><div class="group-count"><strong>${nodes.length}</strong><small>个子任务</small></div></button><div class="node-group-body"><div class="node-group-actions"><span>阶段子任务按截止时间排列</span><div><button data-archive="${item.id}">归档</button><button data-edit="${item.id}">编辑倒计时</button><button data-node-add="${item.id}">＋ 添加子任务</button></div></div><div class="node-children">${children}</div></div></section>`;
   }).join("");
+}
+
+function renderArchive() {
+  const archivedItems = state.items.filter((item) => item.archived);
+  const archivedIds = new Set(archivedItems.map((item) => item.id));
+  state.selectedArchiveItems.forEach((id) => { if (!archivedIds.has(id)) state.selectedArchiveItems.delete(id); });
+  const keyword = state.archiveSearch.trim().toLowerCase();
+  const items = keyword ? archivedItems.filter((item) => archiveSearchText(item).includes(keyword)) : archivedItems;
+  $("#archiveCount").textContent = archivedItems.length;
+  $("#archiveSelectedCount").textContent = state.selectedArchiveItems.size;
+  $("#archiveBulkDelete").disabled = state.selectedArchiveItems.size === 0;
+  $("#archiveSelectPage").disabled = items.length === 0;
+  const totalPages = Math.max(1, Math.ceil(items.length / state.archivePageSize));
+  state.archivePage = Math.min(Math.max(1, state.archivePage), totalPages);
+  const pageStart = (state.archivePage - 1) * state.archivePageSize;
+  const pageItems = items.slice(pageStart, pageStart + state.archivePageSize);
+  const allPageSelected = pageItems.length > 0 && pageItems.every((item) => state.selectedArchiveItems.has(item.id));
+  $("#archiveSelectPage").textContent = allPageSelected ? "取消本页" : "全选本页";
+  $("#archivePagination").hidden = !items.length;
+  $("#archivePagination").innerHTML = items.length ? `<button data-archive-page="prev" ${state.archivePage === 1 ? "disabled" : ""}>‹ 上一页</button><span>第 ${state.archivePage} / ${totalPages} 页 · 共 ${items.length} 项${keyword ? ` · 已检索 ${archivedItems.length} 项` : ""}</span><button data-archive-page="next" ${state.archivePage === totalPages ? "disabled" : ""}>下一页 ›</button>` : "";
+  if (!archivedItems.length) {
+    $("#archiveList").innerHTML = `<div class="archive-empty"><b>归档箱是空的</b><span>归档后的事项会集中显示在这里。</span></div>`;
+    return;
+  }
+  if (!items.length) {
+    $("#archiveList").innerHTML = `<div class="archive-empty"><b>没有匹配的归档项</b><span>换个关键词再试试。</span></div>`;
+    return;
+  }
+  $("#archiveList").innerHTML = pageItems.map((item) => {
+    const expanded = state.expandedArchiveItems.has(item.id);
+    const nodes = [...item.milestones].sort((a, b) => a.deadline.localeCompare(b.deadline));
+    const children = nodes.length ? nodes.map((node, index) => `<div class="archive-node ${node.completed ? "completed" : ""}"><span>${index + 1}</span><div><b>${escapeHtml(node.title)}</b><small>${formatDate(node.start_date)} → ${formatDate(node.deadline)} · ${escapeHtml(node.status_label)}</small></div></div>`).join("") : `<div class="archive-node-empty">没有阶段子任务</div>`;
+    const description = item.description ? `<p class="archive-description">${escapeHtml(item.description)}</p>` : "";
+    const checked = state.selectedArchiveItems.has(item.id) ? "checked" : "";
+    return `<article class="archive-card ${expanded ? "" : "collapsed"}" style="--item-color:${item.color}"><div class="archive-card-head"><label class="archive-check" title="选择归档项"><input type="checkbox" data-archive-select="${item.id}" ${checked}><span></span></label><button data-archive-group-toggle="${item.id}" aria-expanded="${expanded}"><span class="group-chevron">⌄</span><div><h3>${escapeHtml(item.title)}</h3><small>${escapeHtml(item.category)} · ${formatDate(item.start_date)} → ${formatDate(item.deadline)} · ${nodes.length} 个子任务</small></div></button><button class="archive-restore" data-archive="${item.id}">恢复到事项管理</button></div><div class="archive-card-body">${description}<div class="archive-nodes">${children}</div></div></article>`;
+  }).join("");
+}
+
+function archiveSearchText(item) {
+  return [item.title, item.category, item.description, item.start_date, item.deadline, ...(item.milestones || []).flatMap((node) => [node.title, node.start_date, node.deadline])]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 function openDialog(item = null, chosenDate = null) {
@@ -272,6 +318,13 @@ async function reloadAndKeepDrawer() {
 
 document.addEventListener("change", async (event) => {
   const timelineToggle = event.target.closest("[data-timeline-toggle]");
+  const archiveSelect = event.target.closest("[data-archive-select]");
+  if (archiveSelect) {
+    const id = Number(archiveSelect.dataset.archiveSelect);
+    archiveSelect.checked ? state.selectedArchiveItems.add(id) : state.selectedArchiveItems.delete(id);
+    renderArchive();
+    return;
+  }
   if (!timelineToggle) return;
   const id = timelineToggle.dataset.timelineToggle;
   const url = timelineToggle.dataset.timelineKind === "milestone" ? `/api/milestones/${id}/toggle` : `/api/countdowns/${id}/toggle`;
@@ -289,11 +342,13 @@ document.addEventListener("change", async (event) => {
 
 document.addEventListener("click", async (event) => {
   const edit = event.target.closest("[data-edit]"); const toggle = event.target.closest("[data-toggle]"); const remove = event.target.closest("[data-delete]"); const dayDetails = event.target.closest("[data-day-details]"); const itemDetails = event.target.closest("[data-item-details]");
+  const archive = event.target.closest("[data-archive]");
   const nodeEdit = event.target.closest("[data-node-edit]"); const nodeToggle = event.target.closest("[data-node-toggle]"); const nodeDelete = event.target.closest("[data-node-delete]");
-  const nodeAdd = event.target.closest("[data-node-add]"); const groupToggle = event.target.closest("[data-node-group-toggle]"); const drawerToggle = event.target.closest("[data-drawer-toggle]");
+  const nodeAdd = event.target.closest("[data-node-add]"); const groupToggle = event.target.closest("[data-node-group-toggle]"); const drawerToggle = event.target.closest("[data-drawer-toggle]"); const archiveGroupToggle = event.target.closest("[data-archive-group-toggle]"); const archivePage = event.target.closest("[data-archive-page]");
   if (edit) { closeDayDrawer(); openDialog(state.items.find((i) => i.id === Number(edit.dataset.edit))); }
   if (toggle) { await api(`/api/countdowns/${toggle.dataset.toggle}/toggle`, { method: "PATCH" }); await reloadAndKeepDrawer(); }
   if (remove && confirm("确定删除这个倒计时吗？")) { await api(`/api/countdowns/${remove.dataset.delete}`, { method: "DELETE" }); toast("事项已删除"); await reloadAndKeepDrawer(); }
+  if (archive) { const item = state.items.find((entry) => entry.id === Number(archive.dataset.archive)); if (item?.archived) { state.expandedArchiveItems.delete(item.id); state.selectedArchiveItems.delete(item.id); } await api(`/api/countdowns/${archive.dataset.archive}/archive`, { method: "PATCH" }); toast(item?.archived ? "已取消归档" : "事项已归档"); await loadItems(); }
   if (itemDetails) openDayDrawer(itemDetails.dataset.date, itemDetails.dataset.itemDetails);
   else if (dayDetails) openDayDrawer(dayDetails.dataset.dayDetails);
   else if (event.target.closest(".day") && !edit && !nodeEdit) openDayDrawer(event.target.closest(".day").dataset.date);
@@ -312,6 +367,19 @@ document.addEventListener("click", async (event) => {
       requestAnimationFrame(() => card.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
   }
+  if (archiveGroupToggle) {
+    const id = Number(archiveGroupToggle.dataset.archiveGroupToggle);
+    state.expandedArchiveItems.has(id) ? state.expandedArchiveItems.delete(id) : state.expandedArchiveItems.add(id);
+    const card = archiveGroupToggle.closest(".archive-card");
+    const expanded = state.expandedArchiveItems.has(id);
+    card?.classList.toggle("collapsed", !expanded);
+    archiveGroupToggle.setAttribute("aria-expanded", String(expanded));
+  }
+  if (archivePage && !archivePage.disabled) {
+    state.archivePage += archivePage.dataset.archivePage === "next" ? 1 : -1;
+    renderArchive();
+    $("#archiveList").scrollTop = 0;
+  }
   if (groupToggle) {
     const id = Number(groupToggle.dataset.nodeGroupToggle);
     state.collapsedNodeGroups.has(id) ? state.collapsedNodeGroups.delete(id) : state.collapsedNodeGroups.add(id);
@@ -328,6 +396,36 @@ $("#drawerBackdrop").addEventListener("click", closeDayDrawer);
 $("#dayDrawer").addEventListener("wheel", (event) => event.stopPropagation(), { passive: true });
 $("#drawerAdd").addEventListener("click", () => { const date = state.drawerDate; closeDayDrawer(); openDialog(null, date); });
 $("#newTaskButton").addEventListener("click", () => openDialog());
+$("#archiveButton").addEventListener("click", () => { state.archivePage = 1; renderArchive(); $("#archiveList").scrollTop = 0; $("#archiveDialog").showModal(); });
+$("#closeArchiveDialog").addEventListener("click", () => $("#archiveDialog").close());
+$("#archiveSearch").addEventListener("input", (event) => {
+  state.archiveSearch = event.target.value;
+  state.archivePage = 1;
+  renderArchive();
+  $("#archiveList").scrollTop = 0;
+});
+$("#archiveSelectPage").addEventListener("click", () => {
+  const keyword = state.archiveSearch.trim().toLowerCase();
+  const items = state.items.filter((item) => item.archived && (!keyword || archiveSearchText(item).includes(keyword)));
+  const pageStart = (state.archivePage - 1) * state.archivePageSize;
+  const pageItems = items.slice(pageStart, pageStart + state.archivePageSize);
+  const allSelected = pageItems.length > 0 && pageItems.every((item) => state.selectedArchiveItems.has(item.id));
+  pageItems.forEach((item) => allSelected ? state.selectedArchiveItems.delete(item.id) : state.selectedArchiveItems.add(item.id));
+  renderArchive();
+});
+$("#archiveBulkDelete").addEventListener("click", async () => {
+  const ids = [...state.selectedArchiveItems].filter((id) => state.items.some((item) => item.id === id && item.archived));
+  if (!ids.length) { renderArchive(); return; }
+  if (!confirm(`确定永久删除选中的 ${ids.length} 个归档事项吗？其下所有时间节点也会一并删除。`)) return;
+  for (const id of ids) {
+    await api(`/api/countdowns/${id}`, { method: "DELETE" });
+    state.selectedArchiveItems.delete(id);
+    state.expandedArchiveItems.delete(id);
+  }
+  toast(`已删除 ${ids.length} 个归档事项`);
+  await loadItems();
+});
+$("#archiveDialog").addEventListener("wheel", (event) => event.stopPropagation(), { passive: true });
 $("#nodeForm").addEventListener("submit", saveNode);
 $("#closeNodeDialog").addEventListener("click", () => $("#nodeDialog").close());
 $("#cancelNodeDialog").addEventListener("click", () => $("#nodeDialog").close());

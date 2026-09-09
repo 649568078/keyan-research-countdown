@@ -1,4 +1,5 @@
 from datetime import date
+import sqlite3
 
 import pytest
 
@@ -40,6 +41,59 @@ def test_crud_flow(client):
     assert client.patch(f"/api/countdowns/{item_id}/toggle").get_json()["completed"] is True
     assert client.delete(f"/api/countdowns/{item_id}").status_code == 204
     assert client.get("/api/countdowns").get_json() == []
+
+
+def test_archive_countdown(client):
+    created = client.post("/api/countdowns", json=sample_payload()).get_json()
+    item_id = created["id"]
+    assert created["archived"] is False
+
+    archived = client.patch(f"/api/countdowns/{item_id}/archive")
+    assert archived.status_code == 200
+    assert archived.get_json()["archived"] is True
+    assert client.get("/api/countdowns").get_json()[0]["archived"] is True
+
+    restored = client.patch(f"/api/countdowns/{item_id}/archive")
+    assert restored.get_json()["archived"] is False
+
+
+def test_archive_migration_preserves_existing_database(tmp_path):
+    database_path = tmp_path / "legacy.sqlite3"
+    connection = sqlite3.connect(database_path)
+    connection.executescript("""
+        CREATE TABLE countdowns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            deadline TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT '其他',
+            description TEXT NOT NULL DEFAULT '',
+            color TEXT NOT NULL DEFAULT '#536dfe',
+            completed INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE milestones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            countdown_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            deadline TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            completed INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO countdowns
+            (title, start_date, deadline, category, description, color, completed)
+        VALUES
+            ('原有科研任务', '2026-09-01', '2026-09-20', '论文', '', '#536dfe', 0);
+    """)
+    connection.commit()
+    connection.close()
+
+    migrated_client = create_app({"TESTING": True, "DATABASE": str(database_path)}).test_client()
+    items = migrated_client.get("/api/countdowns").get_json()
+    assert len(items) == 1
+    assert items[0]["title"] == "原有科研任务"
+    assert items[0]["archived"] is False
 
 
 def test_health_check(client):

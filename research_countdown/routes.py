@@ -67,6 +67,15 @@ def countdown_toggle(item_id):
     return jsonify(serialize_countdown(row, milestones=repository.list_milestones(item_id)))
 
 
+@bp.patch("/api/countdowns/<int:item_id>/archive")
+def countdown_archive(item_id):
+    row = repository.get_countdown(item_id)
+    if row is None:
+        return jsonify({"error": "事项不存在"}), 404
+    row = repository.set_countdown_archived(item_id, not bool(row["archived"]))
+    return jsonify(serialize_countdown(row, milestones=repository.list_milestones(item_id)))
+
+
 @bp.delete("/api/countdowns/<int:item_id>")
 def countdown_delete(item_id):
     if not repository.delete_countdown(item_id):

@@ -94,6 +94,16 @@ def delete_countdown(item_id):
     return cursor.rowcount > 0
 
 
+def set_countdown_archived(item_id, archived):
+    db = get_db()
+    db.execute(
+        "UPDATE countdowns SET archived = ? WHERE id = ?",
+        (1 if archived else 0, item_id),
+    )
+    db.commit()
+    return get_countdown(item_id)
+
+
 def _replace_milestones(item_id, milestones, db):
     db.execute("DELETE FROM milestones WHERE countdown_id = ?", (item_id,))
     db.executemany(

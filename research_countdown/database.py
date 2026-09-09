@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS countdowns (
     description TEXT NOT NULL DEFAULT '',
     color TEXT NOT NULL DEFAULT '#536dfe',
     completed INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (deadline >= start_date)
 );
@@ -51,5 +52,11 @@ def close_db(_error=None):
 def init_database(app):
     app.teardown_appcontext(close_db)
     with app.app_context():
-        get_db().executescript(SCHEMA)
-        get_db().commit()
+        db = get_db()
+        db.executescript(SCHEMA)
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(countdowns)")}
+        if "archived" not in columns:
+            db.execute(
+                "ALTER TABLE countdowns ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"
+            )
+        db.commit()

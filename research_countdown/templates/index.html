@@ -51,7 +51,7 @@
       </section>
 
       <section id="nodesView" class="view">
-        <div class="dashboard-header"><div><h2>事项与子任务</h2><p>新建和管理主任务；展开主任务后可继续添加阶段子任务。</p></div><div class="node-toolbar"><select id="nodeParentFilter"><option value="all">全部事项</option></select><button id="newTaskButton" class="primary-button">＋ 新建任务</button></div></div>
+        <div class="dashboard-header"><div><h2>事项与子任务</h2><p>新建和管理当前任务；归档内容统一收纳在归档箱中。</p></div><div class="node-toolbar"><select id="nodeParentFilter"><option value="all">全部事项</option></select><button id="archiveButton" class="ghost-button">归档箱 <span id="archiveCount">0</span></button><button id="newTaskButton" class="primary-button">＋ 新建任务</button></div></div>
         <div id="nodeList" class="node-list"></div>
       </section>
     </main>
@@ -84,6 +84,20 @@
       <p id="nodeFormError" class="form-error"></p>
       <div class="dialog-actions"><button type="button" class="danger-button dialog-delete" id="deleteNodeButton">删除节点</button><button type="button" class="ghost-button" id="editParentFromNode">编辑所属主事项</button><span class="action-spacer"></span><button type="button" class="ghost-button" id="cancelNodeDialog">取消</button><button type="submit" class="primary-button">保存节点</button></div>
     </form>
+  </dialog>
+  <dialog id="archiveDialog" class="archive-dialog">
+    <div class="archive-dialog-shell">
+      <div class="dialog-header"><div><p class="eyebrow">ARCHIVE</p><h2>归档箱</h2><p>点击归档事项可查看其子任务，也可以恢复到事项管理。</p></div><button type="button" class="icon-button" id="closeArchiveDialog">×</button></div>
+      <div class="archive-tools">
+        <label class="archive-search">检索归档项<input id="archiveSearch" type="search" placeholder="按事项、分类、备注或子任务检索"></label>
+        <div class="archive-bulk-actions">
+          <button type="button" class="ghost-button" id="archiveSelectPage">全选本页</button>
+          <button type="button" class="danger-button" id="archiveBulkDelete">批量删除 <span id="archiveSelectedCount">0</span></button>
+        </div>
+      </div>
+      <div id="archiveList" class="archive-list"></div>
+      <div id="archivePagination" class="archive-pagination"></div>
+    </div>
   </dialog>
   <aside id="dayDrawer" class="day-drawer" aria-hidden="true">
     <div class="drawer-header"><div><p class="eyebrow">DAILY SCHEDULE</p><h2 id="drawerDate"></h2></div><button class="icon-button" id="closeDrawer" aria-label="关闭">×</button></div>

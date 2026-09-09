@@ -112,6 +112,7 @@ def serialize_countdown(row, today=None, milestones=None):
     deadline = date.fromisoformat(row["deadline"])
     start = date.fromisoformat(row["start_date"])
     completed = bool(row["completed"])
+    archived = bool(row["archived"]) if "archived" in row.keys() else False
     days_left, status, status_label = _status_for(deadline, completed, today)
 
     total_days = max((deadline - start).days, 1)
@@ -147,6 +148,7 @@ def serialize_countdown(row, today=None, milestones=None):
         "description": row["description"],
         "color": row["color"],
         "completed": completed,
+        "archived": archived,
         "days_left": days_left,
         "status": status,
         "status_label": status_label,
