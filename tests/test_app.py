@@ -57,6 +57,13 @@ def test_archive_countdown(client):
     assert restored.get_json()["archived"] is False
 
 
+def test_description_allows_long_notes(client):
+    long_note = "A" * 12000
+    created = client.post("/api/countdowns", json=sample_payload(description=long_note))
+    assert created.status_code == 201
+    assert created.get_json()["description"] == long_note
+
+
 def test_archive_migration_preserves_existing_database(tmp_path):
     database_path = tmp_path / "legacy.sqlite3"
     connection = sqlite3.connect(database_path)

@@ -68,7 +68,7 @@
         <div id="milestoneRows" class="milestone-rows"></div>
       </section>
       <div class="form-row"><label>分类<select id="category">{% for category in categories %}<option>{{ category }}</option>{% endfor %}</select></label><fieldset><legend>标记颜色</legend><div class="color-options">{% for color in colors %}<label class="color-choice" style="--choice: {{ color }}"><input type="radio" name="color" value="{{ color }}" {% if loop.first %}checked{% endif %}><span></span></label>{% endfor %}</div></fieldset></div>
-      <label>备注<textarea id="description" maxlength="500" rows="3" placeholder="记录投稿要求、材料清单或关键说明……"></textarea></label>
+      <label>备注<textarea id="description" rows="8" placeholder="记录投稿要求、材料清单或关键说明……"></textarea></label>
       <p id="formError" class="form-error"></p>
       <div class="dialog-actions"><button type="button" class="danger-button dialog-delete" id="deleteEventButton">删除事项</button><span class="action-spacer"></span><button type="button" class="ghost-button" id="cancelDialog">取消</button><button type="submit" class="primary-button">保存事项</button></div>
     </form>

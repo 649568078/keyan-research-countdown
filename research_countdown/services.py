@@ -65,7 +65,7 @@ def validate_payload(payload):
         "start_date": start.isoformat(),
         "deadline": deadline.isoformat(),
         "category": category,
-        "description": str(payload.get("description", "")).strip()[:500],
+        "description": str(payload.get("description", "")).strip(),
         "color": color,
         "completed": 1 if payload.get("completed") in (True, 1, "1") else 0,
         "milestones": milestones,
